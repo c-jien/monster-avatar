@@ -25,7 +25,10 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "AGENTS.md",
+    "docs/images",
+    "docs/API.md"
   ],
   "sideEffects": [
     "./dist/monster-avatar.js"
@@ -49,7 +52,8 @@
     "dev": "node scripts/serve.mjs",
     "prepack": "npm run build",
     "prepublishOnly": "npm test && npm run test:types && npm run test:browser && npm run test:package",
-    "test:package": "node scripts/test-package.mjs"
+    "test:package": "node scripts/test-package.mjs",
+    "docs:images": "node scripts/generate-showcase.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",

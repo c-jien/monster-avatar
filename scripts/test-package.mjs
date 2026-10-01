@@ -13,7 +13,7 @@ let browser, server;
 try {
   run(process.execPath, ['scripts/build.mjs']);
   const [pack] = JSON.parse(run('npm', ['pack', '--json', '--ignore-scripts', '--pack-destination', temporary]));
-  const expected = ['LICENSE', 'README.md', 'dist/index.cjs', 'dist/index.d.cts', 'dist/index.d.mts', 'dist/index.d.ts', 'dist/index.mjs', 'dist/monster-avatar.js', 'package.json'];
+  const expected = ['AGENTS.md', 'LICENSE', 'README.md', 'dist/index.cjs', 'dist/index.d.cts', 'dist/index.d.mts', 'dist/index.d.ts', 'dist/index.mjs', 'dist/monster-avatar.js', 'docs/API.md', 'docs/images/customization.svg', 'docs/images/showcase.svg', 'package.json'];
   assert.deepEqual(pack.files.map(f => f.path).sort(), expected);
   writeFileSync(path.join(temporary, 'package.json'), JSON.stringify({ name: 'avatar-consumer', private: true }));
   run('npm', ['install', '--ignore-scripts', '--no-audit', '--no-fund', '--package-lock=false', path.join(temporary, pack.filename)], temporary);

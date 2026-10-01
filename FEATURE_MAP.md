@@ -10,6 +10,7 @@ Monster Avatar is a dependency-free seeded SVG avatar library with configurable 
 
 - `command:npm run build`: Builds the package module formats and declarations.
 - `command:npm run dev`: Serves the browser playground locally.
+- `command:npm run docs:images`: Regenerates the README showcase images from the renderer.
 - `command:npm run test:package`: Tests an installed package tarball.
 - `command:npm test`: Runs generator regression and public API tests.
 - `index.html`: Opens the browser playground.
