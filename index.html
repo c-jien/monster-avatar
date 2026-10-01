@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Monster avatars</title>
+<style>
+  :root {
+    --background: oklch(0.985 0 0); --foreground: oklch(0.16 0 0); --card: #fff; --muted: oklch(0.955 0 0);
+    --muted-foreground: oklch(0.46 0 0); --border: oklch(0.91 0 0); --brand: #c45100;
+    color-scheme: light;
+  }
+  :root[data-theme="dark"] {
+    --background: oklch(0.16 0 0); --foreground: oklch(0.97 0 0); --card: oklch(0.2 0 0); --muted: oklch(0.25 0 0);
+    --muted-foreground: oklch(0.7 0 0); --border: oklch(0.3 0 0); --brand: #e0782c;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--background); color: var(--foreground); font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1080px; margin: 0 auto; padding: 32px 16px 80px; }
+  h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted-foreground); margin: 40px 0 12px; font-weight: 600; }
+  p.lede { color: var(--muted-foreground); margin: 0; max-width: 64ch; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 20px; }
+  .av { display: block; border-radius: 999px; overflow: hidden; flex-shrink: 0; background: var(--muted); }
+  .av svg { display: block; width: 100%; height: 100%; }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 20px; }
+  input[type=text] { height: 40px; min-width: 0; flex: 1 1 240px; border: 1px solid var(--border); background: var(--card); color: inherit; border-radius: 8px; padding: 0 12px; font: inherit; outline: none; }
+  input[type=text]:focus { border-color: var(--brand); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 20%, transparent); }
+  button { height: 40px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: inherit; font: inherit; font-weight: 500; cursor: pointer; }
+  button:hover { border-color: var(--brand); }
+  button.primary { background: var(--brand); border-color: var(--brand); color: #fff; }
+  .hero { display: grid; grid-template-columns: auto 1fr; gap: 24px; align-items: center; margin-top: 16px; }
+  .ramp { display: flex; align-items: flex-end; gap: 14px; margin-top: 16px; flex-wrap: wrap; }
+  .ramp figure { margin: 0; display: grid; justify-items: center; gap: 4px; font-size: 11px; color: var(--muted-foreground); }
+  .traits { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--muted); color: var(--muted-foreground); }
+  .chip b { color: var(--foreground); font-weight: 600; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 18px 12px; }
+  .cell { display: grid; justify-items: center; gap: 6px; font-size: 12px; color: var(--muted-foreground); text-align: center; cursor: pointer; background: none; border: 0; height: auto; padding: 0; }
+  .cell span:last-child { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cell:hover .av { box-shadow: 0 0 0 2px var(--brand); }
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .list { display: grid; }
+  .row { display: flex; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .row:last-child { border-bottom: 0; }
+  .row .meta { min-width: 0; flex: 1; }
+  .row .meta div:first-child { font-weight: 600; font-size: 15px; }
+  .row .meta div:last-child { color: var(--muted-foreground); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .letter { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 999px; background: var(--muted); color: var(--muted-foreground); font-weight: 600; flex-shrink: 0; }
+  .concept { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+  .concept .card { padding: 16px; }
+  .concept h3 { margin: 0 0 6px; font-size: 14px; }
+  .concept p { margin: 0; color: var(--muted-foreground); font-size: 13px; }
+  code { font: 12px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; background: var(--muted); padding: 1px 5px; border-radius: 4px; }
+  .pipeline { font: 12px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace; color: var(--muted-foreground); overflow-x: auto; white-space: pre; margin: 12px 0 0; }
+  label.toggle { display: inline-flex; gap: 6px; align-items: center; color: var(--muted-foreground); font-size: 13px; }
+  @media (max-width: 640px) { .hero { grid-template-columns: 1fr; justify-items: center; } .compare { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <p style="margin:0 0 8px;font-size:13px"><a href="people.html" style="color:var(--brand)">People version →</a></p>
+  <h1>Monster avatars</h1>
+  <p class="lede">Placeholder profile pictures generated from a name. Each name always gets the same monster, and no two names are meant to look alike. Nothing is stored or random: the name is hashed, the hash seeds each trait, and the traits are drawn as a 100×100 SVG that the existing round avatar slot crops.</p>
+
+  <div class="toolbar">
+    <input id="name" type="text" value="Ian Cheng" placeholder="Type any name…" aria-label="Name" autocomplete="off">
+    <button id="shuffle" class="primary">Shuffle names</button>
+    <button id="theme">Dark page</button>
+    <label class="toggle"><input id="darkbg" type="checkbox"> Dark avatar backgrounds</label>
+  </div>
+
+  <div class="card hero" style="margin-top:16px">
+    <span class="av" id="big" style="width:176px;height:176px"></span>
+    <div>
+      <div class="traits" id="traits"></div>
+      <div class="ramp" id="ramp"></div>
+      <p style="margin:14px 0 0;color:var(--muted-foreground);font-size:12px">Hash <code id="hash"></code> · normalized key <code id="key"></code> · <a href="#" id="copy" style="color:var(--brand)">copy SVG</a></p>
+    </div>
+  </div>
+
+  <h2>In the existing UI</h2>
+  <div class="compare">
+    <div class="card"><div style="font-size:12px;color:var(--muted-foreground);margin-bottom:4px">Today</div><div class="list" id="before"></div></div>
+    <div class="card"><div style="font-size:12px;color:var(--muted-foreground);margin-bottom:4px">With generated placeholders</div><div class="list" id="after"></div></div>
+  </div>
+
+  <h2>Gallery <span style="text-transform:none;letter-spacing:0;font-weight:400">· click one to inspect it</span></h2>
+  <div class="grid" id="grid"></div>
+
+  <h2>How it works</h2>
+  <div class="card">
+    <div class="pipeline">"  Ian  CHENG " ─normalize─▶ "ian cheng" ─FNV-1a+fmix(key·trait)─▶ one mulberry32 stream per trait ─▶ traits + continuous params ─▶ &lt;svg&gt;</div>
+  </div>
+  <div class="concept" style="margin-top:12px">
+    <div class="card"><h3>Deterministic</h3><p>Integer-only hashing and a seeded PRNG. No <code>Math.random</code>, no DOM, so the server, the browser and tests all produce the same bytes. Case and whitespace are normalized first.</p></div>
+    <div class="card"><h3>Stable per trait</h3><p>Each trait (eyes, mouth, hat…) has its own seed, <code>hash(name + trait)</code>. Adding a new hat later only changes some hats. It doesn't reshuffle everyone's eyes or colours.</p></div>
+    <div class="card"><h3>Many variations</h3><p>Body kind × blob shape × 5 eye layouts × 8 eye styles × 10 mouths × 11 top features × 11 hats × face, neck and ear accessories × 7 patterns × 5 backdrops, plus continuous hue, proportions, outline wobble, gaze and tilt.</p></div>
+    <div class="card"><h3>Built for a circle</h3><p>Portrait framing: head or head-and-shoulders, with key features inside the inscribed circle. Large eyes, a consistent ink outline and flat shading keep it readable at 24px.</p></div>
+    <div class="card"><h3>Harmonious colour</h3><p>Hue comes from the hash. Saturation and lightness are clamped (no olive mud) and the backdrop uses an analogous, complementary or split hue. An optional dark-background variant suits dark mode.</p></div>
+    <div class="card"><h3>Drop-in</h3><p>Returns an SVG string, about 3–8 KB. In the app, render it as <code>&lt;img src={monsterAvatarDataUri(name)}&gt;</code> wherever the letter fallback is now. The markup doesn't change.</p></div>
+  </div>
+</main>
+
+<script src="monster-avatar.js"></script>
+<script>
+  const { monsterAvatar, hash32, normalizeName } = window.MonsterAvatar;
+  const $ = (id) => document.getElementById(id);
+  const FIRST = ["Ava","Noah","Mia","Leo","Zara","Kai","Ines","Theo","Priya","Mateo","Yuki","Omar","Lena","Ravi","Chloe","Jonas","Amara","Felix","Sofia","Hugo","Nadia","Eli","Rosa","Arjun","Maya","Finn","Leila","Soren","Iris","Diego","Hana","Caleb","Nia","Oscar","Tara","Ezra","Lucia","Ibrahim","June","Mei","Wren","Tomas","Aisha","Rhys","Elif","Kenji","Freya","Malik","Clara","Dev"];
+  const LAST = ["Tan","Okafor","Novak","Silva","Kim","Lindqvist","Haddad","Chen","Moreau","Patel","Reyes","Nguyen","Kowalski","Sato","Adeyemi","Rossi","Fischer","Walsh","Ibrahim","Park","Costa","Mendes","Lim","Ortiz","Byrne"];
+  let seed = 1;
+  const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const randomName = () => `${FIRST[Math.floor(rand() * FIRST.length)]} ${LAST[Math.floor(rand() * LAST.length)]}`;
+  let names = [];
+  const theme = () => ($("darkbg").checked ? "dark" : "light");
+
+  let uid = 0;
+  function av(name, size) {
+    const el = document.createElement("span");
+    el.className = "av";
+    el.style.width = el.style.height = size + "px";
+    el.innerHTML = monsterAvatar(name, { theme: theme(), idPrefix: "a" + uid++ }).svg;
+    return el;
+  }
+
+  function renderHero() {
+    const name = $("name").value;
+    const { svg, traits } = monsterAvatar(name, { theme: theme(), idPrefix: "hero" });
+    $("big").innerHTML = svg;
+    const skip = new Set(["key"]);
+    $("traits").innerHTML = Object.entries(traits).filter(([k]) => !skip.has(k)).map(([k, v]) => `<span class="chip">${k} <b>${v}</b></span>`).join("");
+    $("ramp").replaceChildren(...[24, 32, 36, 44, 56, 80].map((px) => {
+      const fig = document.createElement("figure");
+      fig.append(av(name, px), Object.assign(document.createElement("span"), { textContent: px + "px" }));
+      return fig;
+    }));
+    $("hash").textContent = hash32(normalizeName(name) || "?").toString(16).padStart(8, "0");
+    $("key").textContent = JSON.stringify(normalizeName(name));
+  }
+
+  function renderRows() {
+    const people = names.slice(0, 5);
+    const lines = ["Hit a new squat PR today 🎉", "Can we move Thursday to 7?", "Uploaded this week's check-in", "Macros look good, keep going", "Thanks coach!"];
+    const row = (name, i, avatarEl) => {
+      const r = document.createElement("div");
+      r.className = "row";
+      const meta = document.createElement("div");
+      meta.className = "meta";
+      meta.innerHTML = `<div></div><div></div>`;
+      meta.children[0].textContent = name;
+      meta.children[1].textContent = lines[i];
+      r.append(avatarEl, meta);
+      return r;
+    };
+    $("before").replaceChildren(...people.map((p, i) => row(p, i, Object.assign(document.createElement("span"), { className: "letter", textContent: p[0] }))));
+    $("after").replaceChildren(...people.map((p, i) => row(p, i, av(p, 44))));
+  }
+
+  function renderGrid() {
+    $("grid").replaceChildren(...names.map((name) => {
+      const b = document.createElement("button");
+      b.className = "cell";
+      b.title = name;
+      b.append(av(name, 72), Object.assign(document.createElement("span"), { textContent: name }));
+      b.onclick = () => { $("name").value = name; renderHero(); window.scrollTo({ top: 0, behavior: "smooth" }); };
+      return b;
+    }));
+  }
+
+  function shuffle() {
+    const set = new Set();
+    while (set.size < 60) set.add(randomName());
+    names = [...set];
+    renderRows();
+    renderGrid();
+  }
+
+  function renderAll() { uid = 0; renderHero(); renderRows(); renderGrid(); }
+
+  $("name").addEventListener("input", renderHero);
+  $("shuffle").onclick = () => { seed = (Date.now() % 2147483646) + 1; shuffle(); };
+  $("darkbg").onchange = renderAll;
+  $("theme").onclick = () => {
+    const dark = document.documentElement.dataset.theme !== "dark";
+    document.documentElement.dataset.theme = dark ? "dark" : "light";
+    $("theme").textContent = dark ? "Light page" : "Dark page";
+    $("darkbg").checked = dark;
+    renderAll();
+  };
+  $("copy").onclick = (e) => { e.preventDefault(); navigator.clipboard?.writeText(monsterAvatar($("name").value, { theme: theme() }).svg); $("copy").textContent = "copied"; setTimeout(() => ($("copy").textContent = "copy SVG"), 1200); };
+
+  shuffle();
+  renderHero();
+</script>
+</body>
+</html>
