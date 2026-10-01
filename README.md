@@ -1,22 +1,20 @@
 # Monster Avatar
 
-**A little character for every profile.**
-
-Colorful SVG monsters generated from a name or ID. Use them as instant placeholders, or let people choose the details that make an avatar their own.
+A JavaScript library for generating configurable SVG monster avatars from a name or ID. Supports profile-image placeholders, user-selected traits and colors, and saved avatar configurations.
 
 ![Fourteen monster avatars showing different colors, shapes, eyes, hats, and accessories.](docs/images/showcase.svg)
 
-[Get it on npm](https://www.npmjs.com/package/monster-avatar) · [MIT license](LICENSE) · JavaScript + TypeScript · Zero runtime dependencies
+[npm package](https://www.npmjs.com/package/monster-avatar) · [MIT license](LICENSE) · JavaScript + TypeScript · Zero runtime dependencies
 
-[Quick start](#quick-start) · [Customize](#make-it-yours) · [Save and restore](#save-and-restore) · [API reference](docs/API.md) · [For your agent](#for-your-agent)
+[Quick start](#quick-start) · [Customization](#customization) · [Save and restore](#save-and-restore) · [API reference](docs/API.md) · [For your agent](#for-your-agent)
 
-## Why Monster Avatar?
+## Key features
 
-- **Recognizable, with room for personality.** Bodies, eyes, mouths, hats, patterns, and accessories share one illustrated style.
-- **The same seed brings back the same monster.** No image service, API key, or network request needed to generate it.
-- **Automatic until you choose otherwise.** Pick a few traits or colors and let the seed fill in the rest.
-- **Works wherever SVG works.** Use an image source in a web app, generate SVG on a server, or save it as a file.
-- **Small setup, no framework required.** ESM and CommonJS builds, a browser script, and TypeScript definitions are included.
+- **Deterministic generation:** the same seed, generator version, and options produce the same avatar.
+- **Configurable appearance:** override body shape, facial features, accessories, patterns, and colors. Unspecified values are generated from the seed.
+- **SVG output:** generate SVG markup or data URIs for image elements, inline rendering, and file export.
+- **Saved configurations:** serialize avatar settings as JSON and restore them with a compatible generator version.
+- **Browser and Node support:** includes ESM, CommonJS, a browser script, and TypeScript declarations, with no runtime dependencies.
 
 ## Quick start
 
@@ -36,11 +34,11 @@ image.style.borderRadius = '50%';
 document.body.append(image);
 ```
 
-That's it: no account, server, or image files to manage. The result is a normal SVG data URI you can pass to an image's `src` in your preferred framework.
+`monsterAvatarDataUri` returns an SVG data URI suitable for the `src` attribute of an image element. Avatars are generated locally in the browser or in Node.js.
 
-### Use it as a profile fallback
+### Profile-image fallback
 
-Use an uploaded photo when it exists, and a generated monster otherwise:
+Use a generated avatar when the user has no uploaded profile image:
 
 ```js
 const avatarUrl = user.photoUrl || monsterAvatarDataUri(user.id, {
@@ -48,20 +46,20 @@ const avatarUrl = user.photoUrl || monsterAvatarDataUri(user.id, {
 });
 ```
 
-Use an immutable user ID if the avatar should survive username changes. Pass a string in raw mode, converting numeric IDs with `String(user.id)` if needed.
+Use an immutable user ID to preserve the avatar when a username changes. Raw mode requires a string; convert numeric IDs with `String(user.id)`.
 
-### Names or IDs?
+### Seed selection
 
-| Input | Recommended option | What happens |
+| Input | Seed mode | Behavior |
 | --- | --- | --- |
 | Display name | Default, or `seedMode: 'name'` | `"  Alice  "` and `"alice"` produce the same avatar. |
 | User ID or hash string | `seedMode: 'raw'` | Case and whitespace are preserved exactly. The string must be nonempty. |
 
-A seed gives you repeatability, not a guarantee that every avatar will look unique.
+Generation is deterministic, but different seeds are not guaranteed to produce visually distinct avatars.
 
-## Make it yours
+## Customization
 
-Start with a seed, then override only the details you want to choose.
+Pass trait and color overrides in the options object. Unspecified values remain determined by the seed.
 
 ![The same avatar seed with automatic traits, a crown, a single eye, and custom colors.](docs/images/customization.svg)
 
@@ -80,17 +78,17 @@ const avatar = monsterAvatar('Ian Cheng', {
   },
 });
 
-console.log(avatar.svg);    // SVG markup, ready to save or render
-console.log(avatar.config); // The choices needed to recreate it
+console.log(avatar.svg);    // Generated SVG markup
+console.log(avatar.config); // Serializable avatar configuration
 ```
 
-Choose body shape, eye layout and style, mouth, top features, hats, face and neck accessories, earrings, patterns, cheeks, and backdrop. Colors support body, accent, background, and outline (`ink`), with matching shades derived automatically.
+Trait options include body shape, eye layout and style, mouth, top features, hats, face and neck accessories, earrings, patterns, cheeks, and backdrop. Color options include body, accent, background, and outline (`ink`). Related shades are derived automatically.
 
-Leave a field out to make it automatic again. Colors accept `#RGB` or `#RRGGBB`. See the [complete list of traits and options](docs/API.md#traits).
+Omit a field to use its generated value. Colors accept `#RGB` or `#RRGGBB`. See the [trait reference](docs/API.md#traits) for supported values.
 
-### Build an avatar picker
+### Avatar picker controls
 
-Use the exported schema to populate your own controls:
+Use `traitSchema` to populate controls with supported trait values:
 
 ```js
 import { traitSchema, monsterAvatar } from 'monster-avatar';
@@ -102,9 +100,9 @@ const avatar = monsterAvatar('user_2841', {
 });
 ```
 
-A selected trait takes priority over generated details. Choosing glasses, for example, can adjust automatic eyes to a pair. Two incompatible explicit choices—such as a crown and stalk eyes—throw an error, so your picker can ask the user to change one choice or return it to automatic. Compatibility metadata is available through `traitCompatibility`.
+Explicit trait selections take priority over generated values. For example, selecting glasses can change a generated eye layout to a pair. Incompatible explicit selections, such as a crown and stalk eyes, throw `RangeError`. Handle the error in the editor and prompt the user to change or clear a conflicting selection. `traitCompatibility` provides the supported combinations.
 
-### Shuffle without losing your choices
+### Random generation
 
 ```js
 const seed = crypto.randomUUID();
@@ -114,7 +112,7 @@ const avatar = monsterAvatar(seed, {
 });
 ```
 
-Generate and save the seed once. Use a new seed when the user clicks Shuffle; keep their explicit choices in the options. Don't generate a new seed on every render. For server-rendered apps, pass the same saved seed to the client.
+Generate and persist the seed when creating an avatar. To randomize an existing avatar, replace its seed while retaining any selected trait and color overrides. Reuse the saved seed on subsequent renders, including across server and client rendering.
 
 ## Save and restore
 
@@ -130,32 +128,32 @@ const avatar = monsterAvatar('user_2841', {
 
 const saved = JSON.stringify(avatar.config);
 
-// Later, or on another device:
+// Restore the saved configuration:
 const restored = restoreAvatar(JSON.parse(saved), { size: 128 });
 console.log(restored.svg);
 ```
 
-The configuration stores the seed, generator version, theme, and chosen traits and colors. Save this object rather than the resolved `traits` returned for inspection. Size and inline SVG ID prefixes are presentation settings you can supply when restoring.
+The configuration contains the seed, generator version, theme, and explicit trait and color overrides. Persist `config`; the resolved `traits` object is intended for inspection. Supply size and inline SVG ID prefixes separately when restoring.
 
-Generator versions protect against silently changing a saved avatar's appearance. Unsupported versions are rejected. Keep a compatible renderer, or save the SVG itself when you need permanent, exact preservation.
+Restoration requires a supported generator version. Retain a compatible renderer to reproduce saved configurations, or store the generated SVG to preserve the image independently of future library versions.
 
-## Choose your output
+## Output formats
 
-| You need… | Use |
+| Output | API |
 | --- | --- |
-| An image `src` | `monsterAvatarDataUri(seed, options)` |
-| SVG markup or a file | `monsterAvatar(seed, options).svg` |
+| Image source | `monsterAvatarDataUri(seed, options)` |
+| SVG markup | `monsterAvatar(seed, options).svg` |
 | Resolved trait values | `monsterTraits(seed, options)` |
-| A saved avatar | `restoreAvatar(config, presentation)` |
-| Choices for editor controls | `traitSchema` and `traitCompatibility` |
+| Restored avatar | `restoreAvatar(config, presentation)` |
+| Editor choices and compatibility rules | `traitSchema` and `traitCompatibility` |
 
-SVGs default to 100 × 100 and scale cleanly. Set `size` for another output size, or size the image with CSS. Apply `border-radius: 50%` to get the round crop shown above.
+SVGs have a `0 0 100 100` viewBox and default width and height of 100. Set `size` to change the output dimensions, or use CSS to size the image element. Apply `border-radius: 50%` for the circular crop shown in the examples.
 
-For ordinary image use, a data URI keeps each avatar's SVG IDs isolated. When inserting multiple SVGs inline, supply a different `idPrefix` for each instance. Add meaningful alternative text in your app; the generator does not know whose avatar it is.
+Data URI images isolate SVG IDs within each image document. For inline SVGs, supply a distinct `idPrefix` for each instance to avoid ID collisions. Provide alternative text or accessible labels in the consuming application.
 
 The [API reference](docs/API.md) covers all options, validation, inline IDs, browser support, and import formats.
 
-## Try the editor locally
+## Local editor
 
 From a checkout of this repository:
 
@@ -164,21 +162,21 @@ npm ci
 npm run dev
 ```
 
-Open **http://127.0.0.1:4173** to try the controls, compare small sizes, browse a gallery, and export SVGs or saved configurations.
+Open **http://127.0.0.1:4173** to configure avatars, preview them at different sizes, browse generated samples, and export SVGs or configurations.
 
 ## For your agent
 
-Give your coding agent [AGENTS.md](AGENTS.md). It includes an integration recipe, the API contracts to preserve, and guidance for working on this repository.
+[AGENTS.md](AGENTS.md) provides package integration instructions, API contracts, and repository maintenance guidance for coding agents.
 
-A useful starting prompt:
+Example task:
 
 > Read AGENTS.md, then use monster-avatar for profile-image fallbacks. Keep uploaded photos, seed generated avatars from a stable user ID, and preserve the same seed between server and client.
 
-Point your agent at the local file when working from a checkout, or give it the link to the guide on GitHub.
+Reference the local file when working from a checkout, or link to the guide in a task description.
 
 ## Contributing
 
-The renderer lives in `monster-avatar.js`. Generated builds live in `dist/`; edit the source and build them again rather than changing those files directly.
+The renderer source is `monster-avatar.js`. Files in `dist/` are generated by `npm run build`; make changes in the source files and rebuild.
 
 ```sh
 npm test                  # Generator, customization, and saved configurations
@@ -191,8 +189,8 @@ npm run docs:images       # Regenerate the README showcase from the real API
 
 If Chrome is already installed, `PLAYWRIGHT_CHANNEL=chrome npm run test:browser` and `PLAYWRIGHT_CHANNEL=chrome npm run test:package` can use it instead of downloading Chromium. Stop `npm run dev` before running browser tests, which start their own server on port 4173.
 
-Keep default appearances stable: the test suite checks 140 original SVG outputs. See [AGENTS.md](AGENTS.md#working-on-this-repository) for source layout and contributor checks.
+The regression suite checks 140 baseline SVG outputs to detect changes to default appearances. See [AGENTS.md](AGENTS.md#working-on-this-repository) for source layout and contributor checks.
 
 ## License
 
-[MIT](LICENSE) © 2026 c-jien. Free to use and modify, including in commercial projects.
+[MIT](LICENSE) © 2026 c-jien.
