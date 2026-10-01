@@ -1,0 +1,58 @@
+{
+  "name": "monster-avatar",
+  "version": "0.1.0",
+  "description": "Deterministic, customizable monster SVG avatars with zero runtime dependencies.",
+  "license": "MIT",
+  "author": "c-jien",
+  "type": "commonjs",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./browser": "./dist/monster-avatar.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": [
+    "./dist/monster-avatar.js"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "avatar",
+    "monster",
+    "svg",
+    "identicon",
+    "seed",
+    "placeholder"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --test test/*.test.cjs",
+    "test:types": "npm run build && tsc --noEmit --strict --module nodenext --moduleResolution nodenext --target es2022 test/types.mts test/types.cts",
+    "test:browser": "npm run build && playwright test",
+    "dev": "node scripts/serve.mjs",
+    "prepack": "npm run build",
+    "prepublishOnly": "npm test && npm run test:types && npm run test:browser && npm run test:package",
+    "test:package": "node scripts/test-package.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "typescript": "7.0.2"
+  }
+}

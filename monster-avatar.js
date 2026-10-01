@@ -227,10 +227,150 @@
   const PATTERNS = [["none", 30], ["spots", 16], ["stripes", 12], ["belly", 16], ["patch", 9], ["freckles", 10], ["gradient", 7]];
   const BACKDROPS = [["disc", 36], ["none", 22], ["rings", 14], ["dots", 14], ["rays", 14]];
 
+  // ---------- public configuration ----------
+
+  function deepFreeze(value) {
+    for (const child of Object.values(value)) if (child && typeof child === "object") deepFreeze(child);
+    return Object.freeze(value);
+  }
+  const choice = (label, table) => ({ label, type: "enum", values: table.map(([value]) => value) });
+  const traitSchema = deepFreeze({
+    kind: choice("Body", [["blob"], ["bust"]]),
+    eyes: choice("Eye layout", EYE_LAYOUTS),
+    eyeStyle: choice("Eye style", EYE_STYLES),
+    mouth: choice("Mouth", MOUTHS),
+    top: choice("Top feature", TOPS.concat([["stalks"]])),
+    hat: choice("Hat", HATS),
+    face: choice("Face accessory", FACE_ACC),
+    neck: choice("Neck accessory", NECK_ACC),
+    earring: { label: "Earring", type: "boolean", values: [false, true] },
+    pattern: choice("Pattern", PATTERNS),
+    cheeks: { label: "Cheeks", type: "boolean", values: [false, true] },
+    backdrop: choice("Backdrop", BACKDROPS),
+  });
+  function rule(left, right, accepts) {
+    return { traits: [left, right], allowed: traitSchema[left].values.flatMap(a =>
+      traitSchema[right].values.filter(b => accepts(a, b)).map(b => [a, b])) };
+  }
+  // Declarative constraints are exported so editors can explain unavailable choices.
+  const traitCompatibility = deepFreeze([
+    rule("eyes", "top", (eyes, top) => (eyes === "stalks") === (top === "stalks")),
+    rule("hat", "top", (hat, top) => hat === "none" || HAT_TOPS[hat].includes(top)),
+    rule("face", "eyes", (face, eyes) => face === "glasses" ? eyes === "pair" :
+      face === "shades" ? ["pair", "cyclops"].includes(eyes) :
+      face === "monocle" ? ["pair", "cyclops", "triple"].includes(eyes) : true),
+    rule("earring", "hat", (earring, hat) => !earring || hat !== "headphones"),
+    rule("earring", "top", (earring, top) => !earring || top !== "ears-floppy"),
+    rule("pattern", "eyes", (pattern, eyes) => pattern !== "patch" || ["pair", "cyclops", "triple"].includes(eyes)),
+  ]);
+
+  function record(value, label) {
+    if (!value || typeof value !== "object" || Array.isArray(value) ||
+      ![Object.prototype, null].includes(Object.getPrototypeOf(value))) throw new TypeError(`${label} must be a plain object`);
+    return value;
+  }
+  function keys(value, allowed, label) {
+    for (const key of Object.keys(value)) if (!allowed.includes(key)) throw new TypeError(`Unknown ${label}: ${key}`);
+  }
+  function validateOptions(options = {}) {
+    record(options, "options");
+    keys(options, ["size", "theme", "idPrefix", "seedMode", "traits", "colors"], "option");
+    if (options.size !== undefined && (!Number.isFinite(options.size) || options.size <= 0)) throw new TypeError("size must be a positive finite number");
+    if (options.theme !== undefined && !["light", "dark"].includes(options.theme)) throw new TypeError("theme must be light or dark");
+    if (options.seedMode !== undefined && !["name", "raw"].includes(options.seedMode)) throw new TypeError("seedMode must be name or raw");
+    if (options.idPrefix !== undefined && (typeof options.idPrefix !== "string" || !/^[A-Za-z][A-Za-z0-9_-]*$/.test(options.idPrefix)))
+      throw new TypeError("idPrefix must start with a letter and contain only letters, digits, underscores or hyphens");
+    const traits = options.traits === undefined ? {} : record(options.traits, "traits");
+    keys(traits, Object.keys(traitSchema), "trait");
+    for (const [key, value] of Object.entries(traits)) if (!traitSchema[key].values.includes(value)) throw new TypeError(`Invalid trait ${key}: ${String(value)}`);
+    const colors = options.colors === undefined ? {} : record(options.colors, "colors");
+    keys(colors, ["body", "accent", "background", "ink"], "color");
+    for (const [key, value] of Object.entries(colors)) if (typeof value !== "string" || !/^#(?:[\da-f]{3}|[\da-f]{6})$/i.test(value))
+      throw new TypeError(`Color ${key} must be #RGB or #RRGGBB`);
+    return { ...options, traits: { ...traits }, colors: { ...colors } };
+  }
+  function seedKey(seed, mode) {
+    if (mode === "raw") {
+      if (typeof seed !== "string" || !seed.length) throw new TypeError("raw seed must be a nonempty string");
+      return seed;
+    }
+    return normalizeName(seed) || "?";
+  }
+
+  function resolveTraits(key, overrides) {
+    const base = generatedTraits(key);
+    if (!Object.keys(overrides).length) return base;
+    const result = { ...base, ...overrides };
+    const fields = [...new Set(traitCompatibility.flatMap(rule => rule.traits))];
+    const assigned = {};
+    let best, bestCost = Infinity;
+    // Find the compatible result changing the fewest generated traits. Original
+    // legacy combinations stay untouched unless a related choice changes.
+    function search(index, cost) {
+      if (cost >= bestCost) return;
+      if (index === fields.length) { best = { ...assigned }; bestCost = cost; return; }
+      const field = fields[index];
+      const values = Object.hasOwn(overrides, field) ? [overrides[field]] :
+        [base[field], ...traitSchema[field].values.filter(v => v !== base[field])];
+      for (const value of values) {
+        assigned[field] = value;
+        const valid = traitCompatibility.every(({ traits: [a, b], allowed }) =>
+          !Object.hasOwn(assigned, a) || !Object.hasOwn(assigned, b) ||
+          (!Object.hasOwn(overrides, a) && !Object.hasOwn(overrides, b) && assigned[a] === base[a] && assigned[b] === base[b]) ||
+          allowed.some(([x, y]) => assigned[a] === x && assigned[b] === y));
+        if (valid) search(index + 1, cost + (!Object.hasOwn(overrides, field) && value !== base[field] ? 1 : 0));
+        delete assigned[field];
+      }
+    }
+    search(0, 0);
+    if (!best) throw new RangeError(`Incompatible traits: ${Object.entries(overrides).map(([k, v]) => `${k}=${v}`).join(", ")}`);
+    return { ...result, ...best };
+  }
+  function monsterTraits(seed, options) {
+    const opts = validateOptions(options);
+    return resolveTraits(seedKey(seed, opts.seedMode), opts.traits);
+  }
+
+  function hexHsl(hex) {
+    const expanded = hex.length === 4 ? [...hex.slice(1)].map(c => c + c).join("") : hex.slice(1);
+    const [r, g, b] = [0, 2, 4].map(i => parseInt(expanded.slice(i, i + 2), 16) / 255);
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), delta = max - min, light = (max + min) / 2;
+    const hue = !delta ? 0 : max === r ? ((g - b) / delta + 6) % 6 : max === g ? (b - r) / delta + 2 : (r - g) / delta + 4;
+    return [hue * 60, delta ? delta / (1 - Math.abs(2 * light - 1)) * 100 : 0, light * 100];
+  }
+  function applyColors(palette, colors, theme) {
+    if (colors.body) {
+      const [h, s, l] = hexHsl(colors.body);
+      Object.assign(palette, { hue: h, body: colors.body, shade: hsl(h, s * 0.95, l - 14), light: hsl(h, s * 0.75, l + 17) });
+    }
+    if (colors.accent) {
+      const [h, s, l] = hexHsl(colors.accent);
+      Object.assign(palette, { accent: colors.accent, accentShade: hsl(h, s, l - 14), accent2: hsl(h + 60, s, l + 10) });
+    }
+    if (colors.background) {
+      const [h, s, l] = hexHsl(colors.background);
+      Object.assign(palette, { bg: colors.background, bgAlt: hsl(h, s, l + (theme === "dark" ? 6 : -6)) });
+    }
+    if (colors.ink) palette.ink = colors.ink;
+    return palette;
+  }
+
+  function restoreAvatar(config, presentation = {}) {
+    record(config, "config");
+    keys(config, ["version", "seed", "seedMode", "theme", "traits", "colors"], "configuration field");
+    if (config.version !== VERSION) throw new RangeError(`Unsupported avatar version: ${String(config.version)}`);
+    if (typeof config.seed !== "string" || !["name", "raw"].includes(config.seedMode) || !["light", "dark"].includes(config.theme))
+      throw new TypeError("config requires a string seed, seedMode and theme");
+    record(config.traits, "config.traits");
+    record(config.colors, "config.colors");
+    record(presentation, "presentation");
+    keys(presentation, ["size", "idPrefix"], "presentation option");
+    return monsterAvatar(config.seed, { seedMode: config.seedMode, theme: config.theme, traits: config.traits, colors: config.colors, ...presentation });
+  }
+
   // ---------- main ----------
 
-  function monsterTraits(name) {
-    const key = normalizeName(name) || "?";
+  function generatedTraits(key) {
     const R = (t) => stream(key, t);
     const layout = R("eyes.layout").weighted(EYE_LAYOUTS);
     let hat = R("hat").weighted(HATS);
@@ -259,12 +399,12 @@
   }
 
   function monsterAvatar(name, options) {
-    const opts = options || {};
-    const traits = monsterTraits(name);
+    const opts = validateOptions(options);
+    const traits = resolveTraits(seedKey(name, opts.seedMode), opts.traits);
     const key = traits.key;
     const R = (t) => stream(key, t);
     const id = (opts.idPrefix || "m" + hash32(key).toString(36)) + "-";
-    const pal = makePalette(R("palette"), opts.theme);
+    const pal = applyColors(makePalette(R("palette"), opts.theme), opts.colors, opts.theme);
     const back = [], mid = [], front = [];
 
     // --- body & head geometry ---
@@ -595,7 +735,10 @@
     const tilt = R("pose").float(-5, 5);
     const body = `<g transform="rotate(${n(tilt)} 50 100)">${back.join("")}${mid.join("")}${face.join("")}${front.join("")}</g>`;
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="${opts.size || 100}" height="${opts.size || 100}">${backdrop}${body}</svg>`;
-    return { svg, traits: Object.assign({}, traits, { hue: Math.round(pal.hue), tilt: n(tilt) }) };
+    return { svg, traits: Object.assign({}, traits, { hue: Math.round(pal.hue), tilt: n(tilt) }),
+      colors: { body: pal.body, accent: pal.accent, background: pal.bg, ink: pal.ink },
+      config: { version: VERSION, seed: String(name == null ? "" : name), seedMode: opts.seedMode || "name",
+        theme: opts.theme || "light", traits: { ...opts.traits }, colors: { ...opts.colors } } };
 
     // ----- local drawers (hoisted) -----
 
@@ -716,7 +859,7 @@
     return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(monsterAvatar(name, options).svg);
   }
 
-  const api = { monsterAvatar, monsterAvatarDataUri, monsterTraits, normalizeName, hash32, VERSION };
+  const api = { monsterAvatar, monsterAvatarDataUri, monsterTraits, restoreAvatar, traitSchema, traitCompatibility, normalizeName, hash32, VERSION };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.MonsterAvatar = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

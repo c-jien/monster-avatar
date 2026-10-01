@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Monster avatars</title>
+<title>Monster Avatar</title>
 <style>
   :root {
     --background: oklch(0.985 0 0); --foreground: oklch(0.16 0 0); --card: #fff; --muted: oklch(0.955 0 0);
@@ -56,17 +56,31 @@
   .pipeline { font: 12px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace; color: var(--muted-foreground); overflow-x: auto; white-space: pre; margin: 12px 0 0; }
   label.toggle { display: inline-flex; gap: 6px; align-items: center; color: var(--muted-foreground); font-size: 13px; }
   @media (max-width: 640px) { .hero { grid-template-columns: 1fr; justify-items: center; } .compare { grid-template-columns: 1fr; } }
+  .editor h2 { margin: 0 0 6px; text-transform: none; letter-spacing: normal; font-size: 18px; color: var(--foreground); }
+  .help { margin: 0 0 20px; color: var(--muted-foreground); }
+  .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
+  .control { display: grid; gap: 6px; }
+  select, textarea { border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: inherit; font: inherit; padding: 8px; min-width: 0; }
+  select:focus-visible, button:focus-visible, summary:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; }
+  .color-row { display: flex; align-items: center; gap: 8px; }
+  input[type=color] { width: 48px; height: 36px; padding: 2px; border: 1px solid var(--border); border-radius: 6px; background: var(--card); }
+  details { margin-top: 20px; }
+  summary { cursor: pointer; margin-bottom: 12px; }
+  textarea { display: block; width: 100%; margin: 8px 0; font-family: ui-monospace, monospace; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  #status { min-height: 1.5em; }
+  #status[data-error=true] { color: #ba302b; }
 </style>
 </head>
 <body>
 <main>
-  <p style="margin:0 0 8px;font-size:13px"><a href="people.html" style="color:var(--brand)">People version →</a></p>
-  <h1>Monster avatars</h1>
-  <p class="lede">Placeholder profile pictures generated from a name. Each name always gets the same monster, and no two names are meant to look alike. Nothing is stored or random: the name is hashed, the hash seeds each trait, and the traits are drawn as a 100×100 SVG that the existing round avatar slot crops.</p>
+  <h1>Monster Avatar</h1>
+  <p class="lede">A little monster, made yours. Start with a name or ID, choose a few details, and let the rest follow the seed. The same saved choices always bring back the same avatar.</p>
 
   <div class="toolbar">
-    <input id="name" type="text" value="Ian Cheng" placeholder="Type any name…" aria-label="Name" autocomplete="off">
-    <button id="shuffle" class="primary">Shuffle names</button>
+    <input id="name" type="text" value="Ian Cheng" placeholder="Type any name…" aria-label="Name or ID" autocomplete="off">
+    <button id="shuffle" class="primary">Shuffle avatar</button>
+    <label class="toggle">Seed mode <select id="seed-mode"><option value="name">Name</option><option value="raw">Exact ID</option></select></label>
     <button id="theme">Dark page</button>
     <label class="toggle"><input id="darkbg" type="checkbox"> Dark avatar backgrounds</label>
   </div>
@@ -76,9 +90,30 @@
     <div>
       <div class="traits" id="traits"></div>
       <div class="ramp" id="ramp"></div>
-      <p style="margin:14px 0 0;color:var(--muted-foreground);font-size:12px">Hash <code id="hash"></code> · normalized key <code id="key"></code> · <a href="#" id="copy" style="color:var(--brand)">copy SVG</a></p>
+      <p style="margin:14px 0 0;color:var(--muted-foreground);font-size:12px">Hash <code id="hash"></code> · seed key <code id="key"></code></p>
     </div>
   </div>
+
+  <p id="status" role="status" aria-live="polite"></p>
+  <section class="card editor" aria-labelledby="customize-title">
+    <h2 id="customize-title">Make it yours</h2>
+    <p class="help">Automatic details follow the seed. Chosen details stay locked when you shuffle.</p>
+    <div id="trait-controls" class="controls"></div>
+    <h3>Colors</h3>
+    <div id="color-controls" class="controls"></div>
+    <div class="toolbar">
+      <button id="reset">Reset choices</button>
+      <button id="copy">Copy SVG</button>
+      <button id="download">Download SVG</button>
+      <button id="export">Export configuration</button>
+    </div>
+    <details>
+      <summary>Save or restore your choices</summary>
+      <label for="configuration">Avatar configuration (JSON)</label>
+      <textarea id="configuration" rows="9" spellcheck="false" placeholder="Export your configuration here, or paste one to restore it."></textarea>
+      <button id="import">Import configuration</button>
+    </details>
+  </section>
 
   <h2>In the existing UI</h2>
   <div class="compare">
@@ -86,6 +121,7 @@
     <div class="card"><div style="font-size:12px;color:var(--muted-foreground);margin-bottom:4px">With generated placeholders</div><div class="list" id="after"></div></div>
   </div>
 
+  <div class="toolbar"><button id="shuffle-gallery">Shuffle gallery</button></div>
   <h2>Gallery <span style="text-transform:none;letter-spacing:0;font-weight:400">· click one to inspect it</span></h2>
   <div class="grid" id="grid"></div>
 
@@ -94,104 +130,16 @@
     <div class="pipeline">"  Ian  CHENG " ─normalize─▶ "ian cheng" ─FNV-1a+fmix(key·trait)─▶ one mulberry32 stream per trait ─▶ traits + continuous params ─▶ &lt;svg&gt;</div>
   </div>
   <div class="concept" style="margin-top:12px">
-    <div class="card"><h3>Deterministic</h3><p>Integer-only hashing and a seeded PRNG. No <code>Math.random</code>, no DOM, so the server, the browser and tests all produce the same bytes. Case and whitespace are normalized first.</p></div>
-    <div class="card"><h3>Stable per trait</h3><p>Each trait (eyes, mouth, hat…) has its own seed, <code>hash(name + trait)</code>. Adding a new hat later only changes some hats. It doesn't reshuffle everyone's eyes or colours.</p></div>
-    <div class="card"><h3>Many variations</h3><p>Body kind × blob shape × 5 eye layouts × 8 eye styles × 10 mouths × 11 top features × 11 hats × face, neck and ear accessories × 7 patterns × 5 backdrops, plus continuous hue, proportions, outline wobble, gaze and tilt.</p></div>
+    <div class="card"><h3>Deterministic</h3><p>Integer-only hashing and a seeded PRNG. No <code>Math.random</code>, no DOM, so rendering is repeatable without a server or image downloads. Case and whitespace are normalized first.</p></div>
+    <div class="card"><h3>Stable per trait</h3><p>Each trait (eyes, mouth, hat…) has its own seed, <code>hash(name + trait)</code>. Overriding a mouth keeps unrelated generated traits stable. Related details adjust when needed to fit together.</p></div>
+    <div class="card"><h3>Many variations</h3><p>Mix bodies, eyes, mouths, hats, accessories and patterns with procedural proportions and color. Avatars share a style, with plenty of variety. Different seeds are not guaranteed to look unique.</p></div>
     <div class="card"><h3>Built for a circle</h3><p>Portrait framing: head or head-and-shoulders, with key features inside the inscribed circle. Large eyes, a consistent ink outline and flat shading keep it readable at 24px.</p></div>
     <div class="card"><h3>Harmonious colour</h3><p>Hue comes from the hash. Saturation and lightness are clamped (no olive mud) and the backdrop uses an analogous, complementary or split hue. An optional dark-background variant suits dark mode.</p></div>
-    <div class="card"><h3>Drop-in</h3><p>Returns an SVG string, about 3–8 KB. In the app, render it as <code>&lt;img src={monsterAvatarDataUri(name)}&gt;</code> wherever the letter fallback is now. The markup doesn't change.</p></div>
+    <div class="card"><h3>Drop-in</h3><p>Returns an SVG string and a saved configuration. In the app, render it as <code>&lt;img src={monsterAvatarDataUri(name)}&gt;</code> wherever the letter fallback is now. The markup doesn't change.</p></div>
   </div>
 </main>
 
 <script src="monster-avatar.js"></script>
-<script>
-  const { monsterAvatar, hash32, normalizeName } = window.MonsterAvatar;
-  const $ = (id) => document.getElementById(id);
-  const FIRST = ["Ava","Noah","Mia","Leo","Zara","Kai","Ines","Theo","Priya","Mateo","Yuki","Omar","Lena","Ravi","Chloe","Jonas","Amara","Felix","Sofia","Hugo","Nadia","Eli","Rosa","Arjun","Maya","Finn","Leila","Soren","Iris","Diego","Hana","Caleb","Nia","Oscar","Tara","Ezra","Lucia","Ibrahim","June","Mei","Wren","Tomas","Aisha","Rhys","Elif","Kenji","Freya","Malik","Clara","Dev"];
-  const LAST = ["Tan","Okafor","Novak","Silva","Kim","Lindqvist","Haddad","Chen","Moreau","Patel","Reyes","Nguyen","Kowalski","Sato","Adeyemi","Rossi","Fischer","Walsh","Ibrahim","Park","Costa","Mendes","Lim","Ortiz","Byrne"];
-  let seed = 1;
-  const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-  const randomName = () => `${FIRST[Math.floor(rand() * FIRST.length)]} ${LAST[Math.floor(rand() * LAST.length)]}`;
-  let names = [];
-  const theme = () => ($("darkbg").checked ? "dark" : "light");
-
-  let uid = 0;
-  function av(name, size) {
-    const el = document.createElement("span");
-    el.className = "av";
-    el.style.width = el.style.height = size + "px";
-    el.innerHTML = monsterAvatar(name, { theme: theme(), idPrefix: "a" + uid++ }).svg;
-    return el;
-  }
-
-  function renderHero() {
-    const name = $("name").value;
-    const { svg, traits } = monsterAvatar(name, { theme: theme(), idPrefix: "hero" });
-    $("big").innerHTML = svg;
-    const skip = new Set(["key"]);
-    $("traits").innerHTML = Object.entries(traits).filter(([k]) => !skip.has(k)).map(([k, v]) => `<span class="chip">${k} <b>${v}</b></span>`).join("");
-    $("ramp").replaceChildren(...[24, 32, 36, 44, 56, 80].map((px) => {
-      const fig = document.createElement("figure");
-      fig.append(av(name, px), Object.assign(document.createElement("span"), { textContent: px + "px" }));
-      return fig;
-    }));
-    $("hash").textContent = hash32(normalizeName(name) || "?").toString(16).padStart(8, "0");
-    $("key").textContent = JSON.stringify(normalizeName(name));
-  }
-
-  function renderRows() {
-    const people = names.slice(0, 5);
-    const lines = ["Hit a new squat PR today 🎉", "Can we move Thursday to 7?", "Uploaded this week's check-in", "Macros look good, keep going", "Thanks coach!"];
-    const row = (name, i, avatarEl) => {
-      const r = document.createElement("div");
-      r.className = "row";
-      const meta = document.createElement("div");
-      meta.className = "meta";
-      meta.innerHTML = `<div></div><div></div>`;
-      meta.children[0].textContent = name;
-      meta.children[1].textContent = lines[i];
-      r.append(avatarEl, meta);
-      return r;
-    };
-    $("before").replaceChildren(...people.map((p, i) => row(p, i, Object.assign(document.createElement("span"), { className: "letter", textContent: p[0] }))));
-    $("after").replaceChildren(...people.map((p, i) => row(p, i, av(p, 44))));
-  }
-
-  function renderGrid() {
-    $("grid").replaceChildren(...names.map((name) => {
-      const b = document.createElement("button");
-      b.className = "cell";
-      b.title = name;
-      b.append(av(name, 72), Object.assign(document.createElement("span"), { textContent: name }));
-      b.onclick = () => { $("name").value = name; renderHero(); window.scrollTo({ top: 0, behavior: "smooth" }); };
-      return b;
-    }));
-  }
-
-  function shuffle() {
-    const set = new Set();
-    while (set.size < 60) set.add(randomName());
-    names = [...set];
-    renderRows();
-    renderGrid();
-  }
-
-  function renderAll() { uid = 0; renderHero(); renderRows(); renderGrid(); }
-
-  $("name").addEventListener("input", renderHero);
-  $("shuffle").onclick = () => { seed = (Date.now() % 2147483646) + 1; shuffle(); };
-  $("darkbg").onchange = renderAll;
-  $("theme").onclick = () => {
-    const dark = document.documentElement.dataset.theme !== "dark";
-    document.documentElement.dataset.theme = dark ? "dark" : "light";
-    $("theme").textContent = dark ? "Light page" : "Dark page";
-    $("darkbg").checked = dark;
-    renderAll();
-  };
-  $("copy").onclick = (e) => { e.preventDefault(); navigator.clipboard?.writeText(monsterAvatar($("name").value, { theme: theme() }).svg); $("copy").textContent = "copied"; setTimeout(() => ($("copy").textContent = "copy SVG"), 1200); };
-
-  shuffle();
-  renderHero();
-</script>
+<script src="demo.js"></script>
 </body>
 </html>
